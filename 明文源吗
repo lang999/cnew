@@ -21,7 +21,7 @@
     let ex = false;  
     let tp = '';  
 
-    let scu = 'https://url.v1.mk/sub';  
+    let scu = 'https://api.asailor.org/sub';  
     // 远程配置URL（硬编码）
     const remoteConfigUrl = 'https://raw.githubusercontent.com/byJoey/test/refs/heads/main/tist.ini';
 
