@@ -178,6 +178,7 @@ function 获取有效配置快照(环境值 = {}) {
 }
 const 地区映射 = {
   'HK': ['🇭🇰 香港', 'HK', 'Hong Kong'],
+  'TW': ['🇹🇼 台湾', 'TW', 'Taiwan'],
   'US': ['🇺🇸 美国', 'US', 'United States'],
   'SG': ['🇸🇬 新加坡', 'SG', 'Singapore'],
   'JP': ['🇯🇵 日本', 'JP', 'Japan'],
@@ -196,6 +197,11 @@ let 备用地址列表 = [{
   domain: 解码64('UHJveHlJUC5ISy5DTUxpdXNzc3MubmV0'),
   region: 'HK',
   regionCode: 'HK',
+  port: 443
+}, {
+  domain: 解码64('UHJveHlJUC5UVy5DTUxpdXNzc3MubmV0'),
+  region: 'TW',
+  regionCode: 'TW',
   port: 443
 }, {
   domain: 解码64('UHJveHlJUC5VUy5DTUxpdXNzc3MubmV0'),
@@ -504,13 +510,13 @@ async function 检测工作器地区(请求762) {
         'SG': 'SG',
         'JP': 'JP',
         'KR': 'KR',
+        'TW': 'TW',
         'DE': 'DE',
         'SE': 'SE',
         'NL': 'NL',
         'FI': 'FI',
         'GB': 'GB',
         'CN': 'SG',
-        'TW': 'JP',
         'AU': 'SG',
         'CA': 'US',
         'FR': 'DE',
@@ -569,9 +575,11 @@ async function 获取值备用地址(工作器地区753 = '', 值地区匹配752
 }
 function 获取值值(地区747) {
   const 值映射 = {
+    'HK': ['TW', 'JP', 'SG', 'KR'],
+    'TW': ['HK', 'JP', 'SG', 'KR'],
     'US': ['SG', 'JP', 'KR'],
     'SG': ['JP', 'KR', 'US'],
-    'JP': ['SG', 'KR', 'US'],
+    'JP': ['TW', 'HK', 'SG', 'KR', 'US'],
     'KR': ['JP', 'SG', 'US'],
     'DE': ['NL', 'GB', 'SE', 'FI'],
     'SE': ['DE', 'NL', 'FI', 'GB'],
@@ -583,7 +591,7 @@ function 获取值值(地区747) {
 }
 function 获取值值值值(地区746) {
   const 值值745 = 获取值值(地区746);
-  const 值值744 = ['US', 'SG', 'JP', 'KR', 'DE', 'SE', 'NL', 'FI', 'GB'];
+  const 值值744 = ['HK', 'TW', 'US', 'SG', 'JP', 'KR', 'DE', 'SE', 'NL', 'FI', 'GB'];
   return [地区746, ...值值745, ...值值744.filter(结果值743 => 结果值743 !== 地区746 && !值值745.includes(结果值743))];
 }
 function 获取值地区值(工作器地区, 可用地址列表, 值地区匹配 = 启用地区匹配) {
@@ -695,7 +703,7 @@ export default {
               port: 端口713
             } = 解析地址值端口(地址部分716);
             if (!节点名称717) {
-              节点名称717 = '自定义优选-' + 地址714 + (端口713 ? ':' + 端口713 : '');
+              节点名称717 = 地址714 + (端口713 ? ':' + 端口713 : '');
             }
             if (是否有效地址(地址714)) {
               自定义优选地址列表.push({
@@ -825,6 +833,76 @@ export default {
             'Content-Type': 'application/json'
           }
         });
+      }
+      // 处理 /{UUID}/latency-test 或 /{自定义路径}/latency-test
+      // 服务端中转测试 IP 延迟+colo，绕过浏览器 CORS/SNI 限制
+      if (网址698.pathname.endsWith('/latency-test') && 请求735.method === 'POST') {
+        const 路径部分列表LT = 网址698.pathname.split('/').filter(参数值LT => 参数值LT);
+        if (路径部分列表LT.length === 2 && 路径部分列表LT[1] === 'latency-test') {
+          const 路径值LT = 路径部分列表LT[0];
+          let 是否有效LT = false;
+          if (自定义路径 && 自定义路径.trim()) {
+            const 清理LT = 自定义路径.trim().startsWith('/') ? 自定义路径.trim().substring(1) : 自定义路径.trim();
+            是否有效LT = 路径值LT === 清理LT;
+          } else {
+            是否有效LT = 是否有效格式(路径值LT) && 路径值LT === 认证令牌;
+          }
+          if (是否有效LT) {
+            try {
+              const 请求体 = await 请求735.json();
+              const 目标主机 = String(请求体.host || '').replace(/^\[|\]$/g, '');
+              const 目标端口 = String(请求体.port || '443');
+              const 测试地址 = 'https://' + 目标主机 + ':' + 目标端口 + '/cdn-cgi/trace';
+              const 开始时间 = Date.now();
+              const 控制器LT = new AbortController();
+              const 超时LT = setTimeout(() => 控制器LT.abort(), 8000);
+              try {
+                const 响应LT = await fetch(测试地址, { signal: 控制器LT.signal });
+                const 延迟 = Date.now() - 开始时间;
+                clearTimeout(超时LT);
+                let colo = '';
+                let loc = '';
+                try {
+                  const 文本LT = await 响应LT.text();
+                  const colo匹配 = /colo=(.+)/.exec(文本LT);
+                  if (colo匹配) colo = colo匹配[1].trim();
+                  const loc匹配 = /loc=(.+)/.exec(文本LT);
+                  if (loc匹配) loc = loc匹配[1].trim();
+                } catch(忽略LT) {}
+                return new Response(JSON.stringify({
+                  success: true,
+                  host: 目标主机,
+                  port: 目标端口,
+                  latency: 延迟,
+                  colo: colo,
+                  loc: loc
+                }), { headers: { 'Content-Type': 'application/json' } });
+              } catch(错误LT2) {
+                clearTimeout(超时LT);
+                return new Response(JSON.stringify({
+                  success: false,
+                  host: 目标主机,
+                  port: 目标端口,
+                  latency: -1,
+                  error: 错误LT2.name === 'AbortError' ? '超时' : 错误LT2.message,
+                  colo: ''
+                }), { headers: { 'Content-Type': 'application/json' } });
+              }
+            } catch(错误LT3) {
+              return new Response(JSON.stringify({
+                success: false,
+                error: '请求解析失败: ' + 错误LT3.message,
+                colo: ''
+              }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+            }
+          } else {
+            return new Response(JSON.stringify({
+              success: false,
+              error: '路径验证失败',
+              colo: ''
+            }), { status: 403, headers: { 'Content-Type': 'application/json' } });
+          }
+        }
       }
       if (请求735.method === 'POST' && 启用扩展传输) {
         const 结果值684 = await 处理扩展超文本值(请求735);
@@ -963,6 +1041,7 @@ export default {
             }
           }
         }
+
         if (网址698.pathname === '/') {
           // 检查是否有自定义首页URL配置
           const 自定义值 = 获取配置值('homepage', 本地值734.homepage || 本地值734.HOMEPAGE);
@@ -4142,6 +4221,7 @@ async function 处理订阅值(请求241, 用户240 = null) {
       preferredControlHint: '设置为"关闭优选"时只使用原生地址，不生成优选IP和域名节点',
       regionNames: {
         HK: '🇭🇰 香港',
+        TW: '🇹🇼 台湾',
         US: '🇺🇸 美国',
         SG: '🇸🇬 新加坡',
         JP: '🇯🇵 日本',
@@ -4294,6 +4374,7 @@ async function 处理订阅值(请求241, 用户240 = null) {
       preferredControlHint: 'وقتی "بستن ترجیح" تنظیم شود، فقط از آدرس اصلی استفاده می‌شود، گره‌های IP و دامنه ترجیحی تولید نمی‌شوند',
       regionNames: {
         HK: '🇭🇰 هنگ کنگ',
+        TW: '🇹🇼 تایوان',
         US: '🇺🇸 آمریکا',
         SG: '🇸🇬 سنگاپور',
         JP: '🇯🇵 ژاپن',
@@ -5328,7 +5409,8 @@ async function 处理订阅值(请求241, 用户240 = null) {
                             <select id="wkRegion" style="width: 100%; padding: 12px; background: rgba(0, 0, 0, 0.8); border: 2px solid #00f0ff; color: #00f0ff; font-family: 'Courier New', monospace; font-size: 14px;">
                                     <option value="">${翻译值.autoDetect}</option>
                                     <option value="HK">${翻译值.regionNames.HK}</option>
-                                    <option value="US">${翻译值.regionNames.US}</option>
+          <option value="TW">${翻译值.regionNames.TW}</option>
+          <option value="US">${翻译值.regionNames.US}</option>
                                     <option value="SG">${翻译值.regionNames.SG}</option>
                                     <option value="JP">${翻译值.regionNames.JP}</option>
                                     <option value="KR">${翻译值.regionNames.KR}</option>
@@ -7141,6 +7223,8 @@ document.addEventListener('DOMContentLoaded', function () {
         const 结果20038 = await 测试延迟(主机20040, 端口20039, 测试值控制器.signal);
         结果20038.host = 主机20040;
         结果20038.port = 端口20039;
+        // 有 colo：用用户标注名 或 CF-colo（如 CF-KHH）
+        // 无 colo（服务端fetch失败）：用用户标注名，无标注则用IP本身
         结果20038.nodeName = 结果20038.success && 结果20038.colo ? 节点名称 || 'CF-' + 结果20038.colo : 节点名称 || 主机20040;
         return 结果20038;
       }
@@ -7153,12 +7237,17 @@ document.addEventListener('DOMContentLoaded', function () {
           if (结果20035) {
             const 索引20034 = 测试结果列表.length;
             测试结果列表.push(结果20035);
-            渲染结果(结果20035, 索引20034);
-            本地值20055++;
+            const 渲染结果值 = 渲染结果(结果20035, 索引20034);
+            if (渲染结果值) 本地值20055++;
           }
         }
       }
-      测试状态.textContent = '${是否值236 ? 'تست کامل شد' : '测试完成'}: ' + 本地值20055 + '/' + 本地值20054;
+      测试状态.textContent = '${是否值236 ? 'تست کامل شد' : '测试完成'}: ' + 本地值20055 + '/' + 本地值20054 + (本地值20055 === 0 ? '${是否值236 ? ' (همه ناموفق)' : ' (全部失败)'}' : '');
+      if (本地值20055 === 0) {
+        测试状态.style.color = '#ff3860';
+      } else {
+        测试状态.style.color = '#00ff9d';
+      }
       开始测试值.style.display = 'inline-block';
       值测试值.style.display = 'none';
 
@@ -7693,67 +7782,54 @@ document.addEventListener('DOMContentLoaded', function () {
   }
   async function 测试延迟(主机, 端口, 信号) {
     const 超时 = 8000;
-    let 机房 = '';
-    let 测试网址 = '';
+    const 清理主机 = 主机.replace(/^\\[|\\]$/g, '');
+    const api地址 = window.location.pathname + '/latency-test';
+    console.log('[LatencyTest] Via server relay:', api地址, 'host:', 清理主机, 'port:', 端口);
     try {
       const 控制器 = new AbortController();
       const 超时标识 = setTimeout(() => 控制器.abort(), 超时);
       if (信号) {
         信号.addEventListener('abort', () => 控制器.abort());
       }
-      const 清理主机 = 主机.replace(/^\\[|\\]$/g, '');
-      const 十六进制地址 = 地址转十六进制(清理主机);
-      const 测试域名 = 十六进制地址 ? 十六进制地址 + '.nip.lfree.org' : 清理主机 + '.nip.lfree.org';
-      测试网址 = 'https://' + 测试域名 + ':' + 端口 + '/';
-      console.log('[LatencyTest] Testing:', 测试网址, 'Original:', 主机 + ':' + 端口, 'HexIP:', 十六进制地址);
-      const 首次开始 = Date.now();
-      const 响应1 = await fetch(测试网址, {
+      const 响应 = await fetch(api地址, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ host: 清理主机, port: 端口 }),
         signal: 控制器.signal
       });
-      const 首次值 = Date.now() - 首次开始;
-      if (!响应1.ok) {
-        clearTimeout(超时标识);
+      clearTimeout(超时标识);
+      const 数据 = await 响应.json();
+      if (数据.success) {
+        console.log('[LatencyTest] OK:', 清理主机 + ':' + 端口, 'colo:', 数据.colo, 'loc:', 数据.loc, 'latency:', 数据.latency);
+        return {
+          success: true,
+          latency: 数据.latency,
+          colo: 数据.colo || '',
+          loc: 数据.loc || '',
+          host: 清理主机,
+          port: 端口
+        };
+      } else {
+        console.log('[LatencyTest] Failed:', 清理主机 + ':' + 端口, 数据.error || 'unknown');
         return {
           success: false,
-          latency: 首次值,
-          error: 'HTTP ' + 响应1.status + ' ' + 响应1.statusText,
+          latency: -1,
+          error: 数据.error || '${是否值236 ? 'خطا' : '失败'}',
           colo: '',
-          testUrl: 测试网址
+          host: 清理主机,
+          port: 端口
         };
       }
-      try {
-        const 文本 = await 响应1.text();
-        console.log('[LatencyTest] Response body:', 文本.substring(0, 200));
-        const 数据 = JSON.parse(文本);
-        if (数据.colo) {
-          机房 = 数据.colo;
-        }
-      } catch (事件值) {
-        console.log('[LatencyTest] Parse error:', 事件值.message);
-      }
-      const 值开始 = Date.now();
-      const 响应2 = await fetch(测试网址, {
-        signal: 控制器.signal
-      });
-      await 响应2.text();
-      const 延迟 = Date.now() - 值开始;
-      clearTimeout(超时标识);
-      console.log('[LatencyTest] First:', 首次值 + 'ms (DNS+TLS+RTT)', 'Second:', 延迟 + 'ms (RTT only)');
-      return {
-        success: true,
-        latency: 延迟,
-        colo: 机房,
-        testUrl: 测试网址
-      };
     } catch (错误) {
       const 错误消息 = 错误.name === 'AbortError' ? '${是否值236 ? 'زمان تمام شد' : '超时'}' : 错误.message;
-      console.log('[LatencyTest] Error:', 错误消息, 'URL:', 测试网址);
+      console.log('[LatencyTest] Error:', 错误消息, 'host:', 清理主机 + ':' + 端口);
       return {
         success: false,
         latency: -1,
         error: 错误消息,
         colo: '',
-        testUrl: 测试网址
+        host: 清理主机,
+        port: 端口
       };
     }
   }
@@ -8822,7 +8898,7 @@ function 更新自定义优选来源值() {
           port: 端口22
         } = 解析地址值端口(地址部分25);
         if (!节点名称26) {
-          节点名称26 = '自定义优选-' + 地址23 + (端口22 ? ':' + 端口22 : '');
+          节点名称26 = 地址23 + (端口22 ? ':' + 端口22 : '');
         }
         if (是否有效地址(地址23)) {
           自定义优选地址列表.push({
